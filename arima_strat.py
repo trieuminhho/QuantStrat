@@ -7,7 +7,6 @@ import pandas_datareader as pdr
 from statsmodels.tsa.arima_model import ARIMA
 from sklearn.metrics import mean_squared_error
 
-
 def getStock(stock_name,start_date, end_date):
     """
     Download, calculate and plot the stocks logarithmic returns.
