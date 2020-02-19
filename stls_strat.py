@@ -4,6 +4,7 @@ import matplotlib.pyplot as pyplot
 import pandas_datareader as pdr
 import datetime
 import sympy as sym
+from scipy.optimize import least_squares
 
 
 def getStock(stock_name, start_date, end_date):
@@ -26,17 +27,14 @@ def construct_candidate_matrix(candidates, state):
                 candidate_matrix[j][i] = float(candidates[i])
             else:
                 candidate_matrix[j][i] = float(candidates[i].subs(x, state[j]))
-
     return candidate_matrix
 
 
 def stls(theta, x_dot, threshold):
 
     eta, residuals, rank, singular = np.linalg.lstsq(theta, x_dot, rcond=None)
-
     error = 1
     while error > 0.00001:
-        error_temp = error
         eta_temp = eta
         small_indices = [i for i, x in enumerate(eta) if x < threshold]
         big_indices = [i for i, x in enumerate(eta) if x >= threshold]
@@ -60,12 +58,6 @@ def stls(theta, x_dot, threshold):
     terms = np.count_nonzero(eta)
     return eta, terms
 
-def sym_power(x, n):
-    power = 1
-    for i in range(1, n):
-        power = power * x
-    return power
-
 
 def stls_optimal_threshold(theta, x_dot, thresholds):
     term_list = []
@@ -85,7 +77,6 @@ def print_equation(coefficients, functions):
     equation = 0
     for coeff_index in range(len(coefficients)):
         equation += coefficients[coeff_index] * functions[coeff_index]
-
     print(equation)
 
     return equation
@@ -97,16 +88,16 @@ def plot_estimation(equation, actual):
         price_estimation.append(float(equation.subs(x, time)))
     return price_estimation
 
-
 if __name__ == "__main__":
 
     start_date = datetime.datetime(2019, 1, 1)
     end_date = datetime.datetime(2019, 12, 31)
     # Obtain and plot the logarithmic returns of Amazon prices
-    aapl_df = getStock("AAPL", start_date, end_date)
-    aapl_log_returns = np.array(aapl_df["log_returns"])
+    stock_df = getStock("GOOGL", start_date, end_date)
+    y = np.array(stock_df["log_returns"])
+    y_dot = np.gradient(y)
 
-    aapl_log_returns_dot = np.gradient(aapl_log_returns)
+
 
     # pyplot.plot(aapl_log_returns)
     # pyplot.plot(aapl_log_returns_dot)
@@ -115,26 +106,30 @@ if __name__ == "__main__":
     x = sym.Symbol('x')
     candidate_matrix = []
 
-    for i in range(1, 50):
-        candidate_matrix.append(sym_power(x, i))
+    for i in range(30):
+        candidate_matrix.append(np.power(x, i))
 
-    candidate_matrix_values = construct_candidate_matrix(candidate_matrix, aapl_log_returns)
+
+    candidate_matrix_values = construct_candidate_matrix(candidate_matrix, y)
 
     thresholds = []
     for n in np.linspace(-5, 1, 10):
         thresholds.append(np.float_power(10, n))
 
-    stls_optimal_threshold(candidate_matrix_values, aapl_log_returns_dot, thresholds)
+    #stls_optimal_threshold(candidate_matrix_values, y_dot, thresholds)
 
-    # eta, _ = stls(candidate_matrix_values, aapl_log_returns_dot, 2.18)
-    #
-    # equation = print_equation(eta, candidate_matrix)
-    # price_estimation = plot_estimation(equation, aapl_log_returns)
-    #
-    #
-    # pyplot.plot(aapl_log_returns)
-    # pyplot.plot(price_estimation)
-    # pyplot.xlabel("Time unit")
-    # pyplot.ylabel("Prices")
-    # pyplot.show()
-    #
+    eta, _ = stls(candidate_matrix_values, y_dot, 0.8)
+
+    equation = print_equation(eta, candidate_matrix)
+    equation = sym.integrate(equation, x)
+    price_estimation = plot_estimation(equation, y)
+
+
+
+    pyplot.plot(y, 'rx', label='Actual returns')
+    pyplot.plot(price_estimation, 'bo', label='Predicted returns')
+    pyplot.legend()
+    pyplot.xlabel("Time unit")
+    pyplot.ylabel("Prices")
+    pyplot.show()
+
